@@ -70,9 +70,9 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{github.repository_owner}}/simple_backend
-          flavor: |
-            latest=false
-          tags:
+#          flavor: |
+#            latest=false
+          tags: |
 #            type=raw,value=04
 #            type=raw,value=latest,enable=${{ endsWith(github.ref, github.event.repository.default_branch) }}
 #            type=ref,event=pr
