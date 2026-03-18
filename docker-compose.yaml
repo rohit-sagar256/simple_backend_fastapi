@@ -1,0 +1,92 @@
+services:
+
+  nginx:
+    image: nginx:latest
+    container_name: devops_nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./
+    container_name: devops_backend
+#    ports:
+#      - "8000:8000" # will be proxied by nginx
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/devops_lab
+      REDIS_URL: redis://redis:6373
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  postgres:
+    image: postgres:15.5
+    container_name: devops_postgres
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: devops_lab
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5439:5432"
+
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: devops_redis
+    ports:
+      - "6373:6373"
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  worker:
+    build:
+      context: ./
+    container_name: devops_worker
+    command: celery -A app.celery_app.celery_app worker --loglevel=info
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/devops_lab
+      REDIS_URL: redis://redis:6373
+    depends_on:
+      redis:
+        condition: service_healthy
+
+
+  scheduler:
+    build:
+      context: ./
+    container_name: devops_scheduler
+    command: celery -A app.celery_app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
+    environment:
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@postgres:5432/devops_lab
+      REDIS_URL: redis://redis:6373
+    depends_on:
+      redis:
+        condition: service_healthy
+
+
+
+volumes:
+  postgres_data:
